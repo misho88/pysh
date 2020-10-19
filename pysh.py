@@ -38,10 +38,8 @@ CompletedProcess(args='echo XyZ; echo AbC >&2', returncode=0, stdout=b'XyZ\n', s
 >>> run.sh.oe('echo XyZ; echo AbC >&2')
 CompletedProcess(args='echo XyZ; echo AbC >&2', returncode=0, stdout=b'XyZ\n', stderr=b'AbC\n')
 
-`wait.with_context(proc(...))` also works essentially like `run`, but `run`
-wraps `subprocess.run` directly. `.with_context` is a feature of
-`funcpipes.Pipe`, which enters contexts without a `with` statement and can be
-omitted if there are no context managers:
+`wait(proc(...))` also works essentially like `run`, but `run` wraps
+`subprocess.run` directly:
 >>> wait(proc.o('tr a-z A-Z', b'asdf'))
 CompletedProcess(args=['tr', 'a-z', 'A-Z'], returncode=0, stdout=b'ASDF')
 
@@ -53,7 +51,7 @@ or file-like or a file descriptor and will be transformed into something
 >>> with open(w, 'w') as wf: wf.write('XyZ')
 ...
 3
->>> wait.with_context(proc.o('cat', open(r)))
+>>> wait(proc.o.with_context('cat', open(r)))
 CompletedProcess(args=['cat'], returncode=0, stdout=b'XyZ')
 
 Checking the result for failure and raising an exception is possible with the
@@ -68,7 +66,7 @@ Command '['exit', '7']' returned non-zero exit status 7.
 
 The more interesting features of `Pipe`s include a shell-like calling syntax,
 i.e., `x | f` in lieu of `f(x)` and being able to create partial calls as
-`f[3]` in lieu of `functools.partial(f, 3)`. This allows for the following:
+`f[x]` in lieu of `functools.partial(f, x)`. This allows for the following:
 >>> b'hello' | run.o['tr a-z A-Z'] | get.o
 b'HELLO'
 
@@ -163,6 +161,9 @@ def wait(proc, timeout=None):
         for output in (proc.stdout, proc.stderr)
     )
     return CompletedProcess(proc.args, returncode, *outputs)
+
+
+wait = wait.with_context
 
 
 @Pipe
