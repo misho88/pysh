@@ -24,11 +24,11 @@ enhanced behavior. See later examples for details.
 features:
 >>> from pysh import *
 >>> run('exit 1')
-CompletedProcess(args=['exit', '1'], returncode=1)
+CompletedProcess(args='exit 1', returncode=1)
 >>> run('echo XyZ', stdout=PIPE)
-CompletedProcess(args=['echo', 'XyZ'], returncode=0, stdout=b'XyZ\n')
+CompletedProcess(args='echo XyZ', returncode=0, stdout=b'XyZ\n')
 >>> run.o('echo XyZ')
-CompletedProcess(args=['echo', 'XyZ'], returncode=0, stdout=b'XyZ\n')
+CompletedProcess(args='echo XyZ', returncode=0, stdout=b'XyZ\n')
 >>> run.e('echo XyZ >&2', shell=True)
 CompletedProcess(args='echo XyZ >&2', returncode=0, stderr=b'XyZ\n')
 >>> run.sh.e('echo XyZ >&2')
@@ -41,7 +41,7 @@ CompletedProcess(args='echo XyZ; echo AbC >&2', returncode=0, stdout=b'XyZ\n', s
 `wait(proc(...))` also works essentially like `run`, but `run` wraps
 `subprocess.run` directly:
 >>> wait(proc.o('tr a-z A-Z', b'asdf'))
-CompletedProcess(args=['tr', 'a-z', 'A-Z'], returncode=0, stdout=b'ASDF')
+CompletedProcess(args='tr a-z A-Z', returncode=0, stdout=b'ASDF')
 
 The second argument of `run` and `proc` in `input`, which can be bytes-like
 or file-like or a file descriptor and will be transformed into something
@@ -52,7 +52,7 @@ or file-like or a file descriptor and will be transformed into something
 ...
 3
 >>> wait(proc.o.with_context('cat', open(r)))
-CompletedProcess(args=['cat'], returncode=0, stdout=b'XyZ')
+CompletedProcess(args='cat', returncode=0, stdout=b'XyZ')
 
 Checking the result for failure and raising an exception is possible with the
 `check` function, which uses `subprocess.check_returncode` to raise a
@@ -62,7 +62,7 @@ CalledProcessError:
 ... except CalledProcessError as e:
 ...     print(e)
 ...
-Command '['exit', '7']' returned non-zero exit status 7.
+Command 'exit 7' returned non-zero exit status 7.
 
 The more interesting features of `Pipe`s include a shell-like calling syntax,
 i.e., `x | f` in lieu of `f(x)` and being able to create partial calls as
@@ -73,7 +73,7 @@ b'HELLO'
 """
 
 __all__ = [
-    'proc', 'wait', 'run',
+    'Process', 'proc', 'wait', 'run',
     'check', 'die',
     'PIPE',
     'CompletedProcess', 'CalledProcessError',
@@ -85,37 +85,63 @@ from typing import Optional
 from shlex import split
 import os
 from functools import wraps
+import threading
 
 from funcpipes import Pipe, to, get, now
 
 
-def interface(func: callable, name: str, qualname: Optional[str] = None):
-    if not isinstance(name, str):
-        raise TypeError(f'name must be a str, not {type(name)}')
-    if qualname is not None and not isinstance(qualname, str):
-        raise TypeError(f'qualname must be a str, not {type(qualname)}')
+class Thread(threading.Thread):
+    """thread with a return value"""
+    def __init__(self, target):
+        self.result = None
+        def closure():
+            self.result = target()
+        super().__init__(target=closure)
 
-    @wraps(func)
-    def wrapper(argv, input=None, stdout=None, stderr=None, shell=False, **popen_kwargs):
-        """wrapper around {name}
+    def start(self, *args, **kwargs):
+        super().start(*args, **kwargs)
+        return self
 
-        Args:
-            argv: what to run; if a str and shell=False, will be run through shlex.split
-            input: an input pipe or something to feed into it
-                if input has an "stdout" attribute (as a Popen or CompletedProcess would),
-                it is used. If it can be turned into a memoryview, it is treated as input
-                data. Otherwise, it is passed to {func}.
-            stdout: see subprocess.Popen()
-            stderr: see subprocess.Popen()
-            shell: see subprocess.Popen()
-            **popen_kwargs: passed through to subprocess.Popen()
+    def join(self, *args, **kwargs):
+        super().join(*args, **kwargs)
+        return self.result
 
-        Returns:
-            a CompletedProcess or Popen instance
+
+class Process:
+    r"""subprocess.Popen with tweaks
+
+    argv, input, stdout and stderr can be passed positionally
+    argv will be split as needed
+    input can be used as stdin (file-like or fd) or be memoryview-like
+    Popen.communicate() is called immediately 
+
+    >>> Process('echo 123', stdout=PIPE).wait()
+    CompletedProcess(args='echo 123', returncode=0, stdout=b'123\n')
+    >>> with Process('echo 123', stdout=PIPE) as p: p.wait()
+    ... 
+    CompletedProcess(args='echo 123', returncode=0, stdout=b'123\n')
+    >>> Process('cat >&2', b'123', None, PIPE, shell=True).wait()
+    CompletedProcess(args='cat >&2', returncode=0, stderr=b'123')
+    """
+    def __init__(
+        self,
+        argv, input=None, stdout=None, stderr=None,
+        *, shell=False, **popen_kwargs,
+    ):
+        """set up the process
+        argv: the command line to run as a string or sequence of them
+        input: some data, a file-like object or a file descriptor
+            (incompatible with the stdin keyword to subprocess.Popen)
+        stdout: a file=like object or PIPE
+        stderr: a file=like object or PIPE
+        shell: True to run in a shell
+        popen_kwargs: arguments to pass to subprocess.Popen
         """
+        self.argv = argv
+        self.input = input
+
         if not shell and isinstance(argv, str):
             argv = split(argv)
-
         stdin = popen_kwargs.pop('stdin', None)
         if stdin is not None:  # if stdin is passed directly, honor it
             if input is not None:
@@ -126,44 +152,67 @@ def interface(func: callable, name: str, qualname: Optional[str] = None):
                 input = memoryview(input)
             except TypeError:
                 stdin = input
+                input = None
             else:
-                stdin, pwrite = os.pipe()
-                with open(pwrite, 'wb') as pfile:
-                    pfile.write(input)
+                stdin = PIPE
 
-        return func(argv, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell, **popen_kwargs)
+        self.popen = Popen(
+            argv, stdin=stdin, stdout=stdout, stderr=stderr,
+            shell=shell, **popen_kwargs,
+        )
+        
+        comm = Pipe(self.popen.communicate).partial(input)
+        self.communication_thread = Thread(comm).start()
 
-    wrapper.__doc__ = wrapper.__doc__.format(name=name, func=getattr(func, '__name__', str(func)))
-    wrapper.__name__ = name
-    wrapper.__qualname__ = name if qualname is None else qualname
-    return wrapper
+    def wait(self, timeout=None):
+        """wait for the process to finish"""
+        returncode = self.popen.wait(timeout=timeout)
+        # NOTE: the timeout argument in Popen.wait affects Popen.communicate(),
+        # so this join call should be fine:
+        outputs = self.communication_thread.join()
+        self.result = CompletedProcess(self.argv, returncode, *outputs)
+        return self.result
 
+    def poll(self):
+        """check if the process is running
 
-wrappers = []
-for func, name in (run_, 'run'), (Popen, 'proc'):
-    wrapper = Pipe(interface(func, name))
-    wrapper.sh = wrapper.partial(shell=True)
+        returns None if it is and the returncode if it has finished
+        """
+        return self.popen.poll()
 
-    for w in (wrapper, wrapper.sh):
-        w.o = w.partial(stdout=PIPE, stderr=None)
-        w.e = w.partial(stdout=None, stderr=PIPE)
-        w.oe = w.partial(stdout=PIPE, stderr=PIPE)
-    wrappers.append(wrapper)
-run, proc = wrappers
+    def __enter__(self):
+        self.popen.__enter__()
+        return self
+
+    def __exit__(self, exc_type, value, traceback):
+        return self.popen.__exit__(exc_type, value, traceback)
 
 
 @Pipe
-def wait(proc, timeout=None):
-    """like subprocess.Popen.wait, but returns a CompletedProcess"""
-    returncode = proc.wait(timeout=timeout)
-    outputs = (
-        None if output is None or output.closed else output.read()
-        for output in (proc.stdout, proc.stderr)
-    )
-    return CompletedProcess(proc.args, returncode, *outputs)
+def proc(*args, **kwargs):
+    r"""creates a Process
+
+    >>> proc('echo abc', output=PIPE).wait()
+    CompletedProcess(args='echo abc', returncode=0, stdout=b'abc\n')
+    >>> b'abc' | proc.o['tr a-z A-Z'] | ~wait
+    CompletedProcess(args='tr a-z A-Z', returncode=0, stdout=b'ABC')
+    >>> b'X' * (1 << 20) | proc.o['cat'] | wait | check | get.o | to(len)
+    1048576
+    """
+    return Process(*args, **kwargs)
 
 
-wait = wait.with_context
+wait = to.wait
+run = proc & wait.with_context
+
+
+for func in proc, run:
+    func.sh = func.partial(shell=True)
+
+    for w in (func, func.sh):
+        w.o = w.partial(stdout=PIPE, stderr=None)
+        w.e = w.partial(stdout=None, stderr=PIPE)
+        w.oe = w.partial(stdout=PIPE, stderr=PIPE)
 
 
 @Pipe
