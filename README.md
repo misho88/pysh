@@ -2,6 +2,10 @@
 
 This provides a way to describe some (possibly parallel) execution flow succinctly and then run that flow for given inputs.
 
+## Dependencies:
+
+funcpipes: https://github.com/misho88/funcpipes/
+
 ## Very Simple Example
 
 You can pipe stuff almost like in a shell with `run`, which runs each process to completion, `run.o` means to capture standard output, and `[]` creates a partial function application:
