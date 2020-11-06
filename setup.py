@@ -7,7 +7,7 @@ long_description = pysh.__doc__
 
 setuptools.setup(
     name='pysh',
-    version='0.1.0',
+    version='0.2.0',
     author='Mihail Georgiev',
     author_email='misho88@gmail.com',
     description='pysh - easy-to-use subprocess.run',
