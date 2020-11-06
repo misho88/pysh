@@ -73,6 +73,44 @@ argued that it is more clear to end with a `to(tuple)` or `to(list)` than
 Arguments can be used in places where there is no convenient Python syntax,
 in this case, to indicate no arguments. Also, it can be used to just hold
 arguments for later use.
+
+There's a run() that works similarly to subprocess.run(). It is literally defined
+as `proc & wait`. Note that with `run`, parallel execution is not possible.
+
+>>> echo = to.decode & to(print).partial(end='')
+>>> b'xyz\nabc\n' | echo
+xyz
+abc
+>>> b'xyz\nabc\n' | run.o['tr a-z A-Z'] | run.o['sort'] | get.stdout | echo
+ABC
+XYZ
+
+Using the system shell is possible. The following are exactly equivalent:
+
+>>> run.o('echo abc | tr a-z A-Z', shell=True)
+Result(argv='echo abc | tr a-z A-Z', status=0, stdout=b'ABC\n')
+>>> run.o('echo abc | tr a-z A-Z', shell='sh')
+Result(argv='echo abc | tr a-z A-Z', status=0, stdout=b'ABC\n')
+>>> run.o('echo abc | tr a-z A-Z', shell='sh -c')
+Result(argv='echo abc | tr a-z A-Z', status=0, stdout=b'ABC\n')
+>>> run.sh.o('echo abc | tr a-z A-Z')
+Result(argv='echo abc | tr a-z A-Z', status=0, stdout=b'ABC\n')
+
+and the following is functionally equivalent:
+
+>>> run.o('sh -c "echo abc | tr a-z A-Z"')
+Result(argv='sh -c "echo abc | tr a-z A-Z"', status=0, stdout=b'ABC\n')
+
+And the shell can be changed:
+
+>>> run('[ -n "$BASH_VERSION" ]', shell='bash').status
+0
+>>> run('[ -n "$BASH_VERSION" ]', shell='zsh').status
+1
+>>> run('[ -n "$ZSH_VERSION" ]', shell='bash').status
+1
+>>> run('[ -n "$ZSH_VERSION" ]', shell='zsh').status
+0
 """
 
 from .fd import FD  # noqa: F401
