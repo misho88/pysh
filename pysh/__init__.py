@@ -75,12 +75,11 @@ in this case, to indicate no arguments. Also, it can be used to just hold
 arguments for later use.
 """
 
+from .fd import FD  # noqa: F401
+from .pipe import InputPipe, OutputPipe  # noqa: F401
+from .process import PIPE, Process, Result, ResultError  # noqa: F401
 
-from .fd import FD
-from .pipe import InputPipe, OutputPipe
-from .process import PIPE, Process, Result, ResultError
-
-from funcpipes import Pipe as _Pipe, to, now, get, Arguments
+from funcpipes import Pipe as _Pipe, to, now, get, Arguments  # noqa: F401
 
 
 @_Pipe
