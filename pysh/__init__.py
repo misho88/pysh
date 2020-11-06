@@ -92,7 +92,7 @@ def proc(*args, **kwargs):
 wait = to.wait
 check = to.check
 die = to.die
-run = proc & wait.with_context
+run = proc & wait
 
 for func in proc, run:
     func.sh = func.partial(shell=True)
