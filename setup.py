@@ -15,5 +15,5 @@ setuptools.setup(
     long_description_content_type='text/plain',
     url='https://github.com/misho88/pysh',
     packages=setuptools.find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.8',
 )
