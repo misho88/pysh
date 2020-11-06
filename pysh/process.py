@@ -19,7 +19,7 @@ def get_input(stream):
         return FD(stream, 'rb')
     if isinstance(stream, OutputPipe):
         return stream.read_fd
-    if isinstance(stream, Process):
+    if isinstance(stream, (Process, Result)):
         return get_input(stream.stdout)
     if hasattr(stream, 'fileno'):
         return get_input(stream.fileno())
@@ -63,7 +63,7 @@ class Process:
         argv:   arguments to process; will be run through shlex.split() if a str and shell=False
         stdin:  input data, generally an int or something with a .fileno() method
                 if bytes-like, gets wrapped in an InputPipe
-                if Process, its .stdout is used*
+                if Result or Process*, its .stdout is used
         stdout: standard output, generally an int or something with a .fileno() method
                 if PIPE == -1, set to an OutputPipe
         stderr: standard error, generally an int or something with a .fileno() method
@@ -75,7 +75,7 @@ class Process:
                 otherwise, use as is
 
         *If stdin is a process, it is treated specially. In particular Process.waitall() will
-        work its way back to it, making sure not to try reading its stdout.
+        work its way back to it, making sure not to read its own stdout.
         """
         from shlex import split
         self.argv = argv
@@ -89,6 +89,7 @@ class Process:
                 if len(shell) == 1:
                     shell.append('-c')
             shell.append(argv)
+            argv = shell
         elif isinstance(argv, str):
             argv = split(argv)
 
