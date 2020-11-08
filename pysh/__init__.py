@@ -138,3 +138,15 @@ for func in proc, run:
         w.o = w.partial(stdout=PIPE, stderr=None)
         w.e = w.partial(stdout=None, stderr=PIPE)
         w.oe = w.partial(stdout=PIPE, stderr=PIPE)
+
+
+@_Pipe
+def cwd():
+    from os import getcwdb
+    return getcwdb()
+
+
+@_Pipe
+def cd(path):
+    from os import chdir
+    return chdir(path)
