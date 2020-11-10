@@ -41,7 +41,7 @@ def cwd(path):
     >>> cd('/')
     b'/'
     >>> with cwd('tmp') as dir: print(dir)
-    ... 
+    ...
     b'/tmp'
     >>> pwd()
     b'/'
