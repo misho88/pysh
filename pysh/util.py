@@ -1,39 +1,71 @@
-__all__ = 'Thread',
+__all__ = (
+    'pwd', 'cd', 'cwd',
+    'to', 'now', 'get', 'Arguments',
+    'proc', 'wait', 'check', 'die', 'run',
+)
 
-import threading
+import os
+
+from contextlib import contextmanager
+from funcpipes import Pipe, to, now, get, Arguments
+from .process import Process, PIPE
 
 
-class Thread(threading.Thread):
-    """no-frills thread with a return value
+@Pipe
+def pwd():
+    """alias for os.getcwdb()
 
-    >>> Thread(lambda: 1 + 2).start().join()
-    3
+    >>> cd('/'); pwd()
+    b'/'
     """
-    def __init__(self, target):
-        """initilialize the thread
+    return os.getcwdb()
 
-        target: callable which takes no arguments
-        """
-        self.result = None
 
-        def closure():
-            self.result = target()
+@Pipe
+def cd(path):
+    """alias for os.chdir(), but returns the resultant directory
 
-        super().__init__(target=closure, name=Thread.get_name(target))
+    >>> cd('/tmp')
+    b'/tmp'
+    >>> cd('..')
+    b'/'
+    """
+    os.chdir(path)
+    return pwd()
 
-    def start(self):
-        """start the thread"""
-        super().start()
-        return self
 
-    def join(self, timeout=None):
-        """join the thread"""
-        super().join(timeout)
-        return self.result
+@contextmanager
+def cwd(path):
+    """temporarily changes the working directory
 
-    @staticmethod
-    def get_name(func):
-        """give a decent name to the thread"""
-        if hasattr(func, 'func'):
-            return Thread.get_name(func.func)
-        return repr(func)
+    >>> cd('/')
+    b'/'
+    >>> with cwd('tmp') as dir: print(dir)
+    ... 
+    b'/tmp'
+    >>> pwd()
+    b'/'
+    """
+    orig = pwd()
+    yield cd(path)
+    cd(orig)
+
+
+@Pipe
+def proc(*args, **kwargs):
+    r"""creates a Process, see help(Process)"""
+    return Process(*args, **kwargs)
+
+
+wait = to.wait
+check = to.check
+die = to.die
+run = proc & wait
+
+for func in proc, run:
+    func.sh = func.partial(shell=True)
+
+    for w in (func, func.sh):
+        w.o = w.partial(stdout=PIPE, stderr=None)
+        w.e = w.partial(stdout=None, stderr=PIPE)
+        w.oe = w.partial(stdout=PIPE, stderr=PIPE)

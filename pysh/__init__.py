@@ -114,39 +114,10 @@ And the shell can be changed:
 """
 
 from .fd import FD  # noqa: F401
-from .pipe import InputPipe, OutputPipe  # noqa: F401
+from .pipe import Pipe, InputPipe, OutputPipe  # noqa: F401
 from .process import PIPE, Process, Result, ResultError  # noqa: F401
+from .util import *  # noqa: F401 F403
 
 from funcpipes import Pipe as _Pipe, to, now, get, Arguments  # noqa: F401
 
 
-@_Pipe
-def proc(*args, **kwargs):
-    r"""creates a Process, see help(Process)"""
-    return Process(*args, **kwargs)
-
-
-wait = to.wait
-check = to.check
-die = to.die
-run = proc & wait
-
-for func in proc, run:
-    func.sh = func.partial(shell=True)
-
-    for w in (func, func.sh):
-        w.o = w.partial(stdout=PIPE, stderr=None)
-        w.e = w.partial(stdout=None, stderr=PIPE)
-        w.oe = w.partial(stdout=PIPE, stderr=PIPE)
-
-
-@_Pipe
-def cwd():
-    from os import getcwdb
-    return getcwdb()
-
-
-@_Pipe
-def cd(path):
-    from os import chdir
-    return chdir(path)

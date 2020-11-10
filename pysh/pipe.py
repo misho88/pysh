@@ -1,6 +1,6 @@
 __all__ = 'Pipe', 'InputPipe', 'OutputPipe'
 
-from .util import Thread
+from .thread import Thread
 from .fd import FD
 import os
 from functools import partial
