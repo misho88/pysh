@@ -38,9 +38,54 @@ class Pipe:
         for fd in self.fds:
             fd.close(invalid_ok)
 
-    def write(self, data):
+    def write(self, data_or_source):
+        """open the write FD, feed it some data and close it
+
+        Since this is meant to be a one-off operation, it's a bit more
+        flexible than a traditiona write.
+
+        If data_or_source is bytes-like, it works the same way:
+        >>> f = Pipe(); f.write(b'123'); f.read()
+        3
+        b'123'
+
+        If data_or_source is file-like and has a read() method, it tries to use it:
+        >>> f = Pipe(); g = Pipe()
+        >>> f.write(b'123'); g.write(f); g.read()
+        3
+        3
+        b'123'
+
+        If data_or_source has an open() method like FD.open(), it uses it:
+        >>> f = Pipe(); g = Pipe()
+        >>> f.write(b'123'); g.write(f.read_fd); g.read()
+        3
+        3
+        b'123'
+
+        Finally, if data_or_source is callable, calls it:
+        >>> f = Pipe(); f.write(lambda: b'123'); f.read()
+        3
+        b'123'
+
+        It does *not* automatically open strings or integers, which must be
+        appropriately handled externally.
+        """
         with self.write_fd.open() as file:
-            return file.write(data)
+            try:
+                data = memoryview(data_or_source)
+            except TypeError:
+                source = data_or_source
+                if callable(getattr(source, 'read', None)):
+                    return file.write(source.read())
+                if callable(getattr(source, 'open', None)):
+                    with source.open() as stream:
+                        return file.write(stream.read())
+                if callable(source):
+                    return file.write(source())
+                raise
+            else:
+                return file.write(data)
 
     def read(self):
         with self.read_fd.open() as file:
@@ -62,6 +107,7 @@ class InputPipe(Pipe):
     Creates a thread to feed data into the pipe to remove size limits.
     Also defines suitable fileno() method for use with a subprocess.
 
+    This means that feeding more data than a Pipe can take is nonblocking:
     >>> len(InputPipe(b'X' * 12345678).read())
     12345678
     """
