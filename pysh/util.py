@@ -1,14 +1,50 @@
 __all__ = (
-    'pwd', 'cd', 'cwd',
+    'pid', 'pwd', 'cd', 'cwd', 'lsof', 'lsof_iter',
     'to', 'now', 'get', 'Arguments',
     'proc', 'wait', 'check', 'die', 'run',
 )
 
 import os
+from pathlib import Path
 
 from contextlib import contextmanager
 from funcpipes import Pipe, to, now, get, Arguments
 from .process import Process, PIPE
+
+
+@Pipe
+def pid():
+    """alias for os.getpid()"""
+    return os.getpid()
+
+
+@Pipe
+def lsof_iter(pid=None, return_targets=True):
+    """list open file descriptors
+
+    if return_targets is True (default), yields (fd, target) tuples
+    otherwise, only yields the file descriptors
+
+    This needs /proc to be properly mounted.
+    """
+    if pid is None:
+        pid = os.getpid()
+    proc_path = Path('/', 'proc', str(pid), 'fd')
+    return (
+        (int(fd.name), fd.resolve()) if return_targets else int(fd.name)
+        for fd in proc_path.iterdir()
+    )
+
+
+@Pipe
+def lsof(pid=None):
+    """list open file descriptors
+
+    returns a dict of the form {fd: target}
+
+    This needs /proc to be properly mounted.
+    """
+    return dict(lsof_iter(pid))
 
 
 @Pipe
