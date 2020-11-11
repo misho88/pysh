@@ -87,8 +87,8 @@ class Process:
     Reading data from a running subprocess is also possible. This is easier
     since blocking is not a concern, but there are caveats:
      - the FDs the child is meant to be writing to must be closed in the
-       parent (i.e., the "local" process) *first*
-     - Process.wait() can't be used since it, too, tries to read from stdout,
+       parent (i.e., this "local" process) *first*
+     - Process.wait() can't be used since it also tries to read from stdout,
        but there's little benefit to using it anyway
     With that in mind:
 
