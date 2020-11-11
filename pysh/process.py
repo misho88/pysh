@@ -53,6 +53,55 @@ class Process:
     >>> q = Process('cat', p, stdout=PIPE)
     >>> len(q.wait().stdout)
     12345678
+
+    Feeding the subprocess's stdin after the fact can be done. For small data sizes,
+    this is straightforward:
+
+    >>> from pysh import Pipe
+    >>> fifo = Pipe(); p = Process('cat', fifo.read_fd, stdout=PIPE)
+    >>> fifo.write(b'123'); p.wait().stdout
+    3
+    b'123'
+
+    However, this will deadlock for large data sizes, which is why InputPipe
+    exists. It handles writing to the Pipe in a new thread. This means some
+    additional queue-like object is necessary to write data to the InputPipe:
+
+    >>> from pysh import Pipe
+    >>> fifo = Pipe(); p = Process('cat', InputPipe(fifo), stdout=PIPE)
+    >>> fifo.write(b'x' * 12345678)
+    12345678
+    >>> res = p.wait()
+    >>> len(res.stdout)
+    12345678
+
+    and the choice of such object is not especially important:
+
+    >>> from queue import SimpleQueue
+    >>> queue = SimpleQueue(); p = Process('cat', InputPipe(queue.get), stdout=PIPE)
+    >>> queue.put(b'X' * 12345678)
+    >>> res = p.wait()
+    >>> len(res.stdout)
+    12345678
+
+    Reading data from a running subprocess is also possible. This is easier
+    since blocking is not a concern, but there are caveats:
+     - the FDs the child is meant to be writing to must be closed in the
+       parent (i.e., the "local" process) *first*
+     - Process.wait() can't be used since it, too, tries to read from stdout,
+       but there's little benefit to using it anyway
+    With that in mind:
+
+    >>> p = Process('cat', b'X' * 12345678, stdout=PIPE)
+    >>> p.close_local()
+    >>> len(p.stdout.read())
+    12345678
+    >>> p.waitpid()
+    0
+
+    It is also possible to mess around with Process.read() and .read_all() to
+    a similar effect, but it is likely not worthwhile. Regardless, whenever
+    possible, it is much easier to use Process.wait() and .wait_all().
     """
     def __init__(
         self,
@@ -150,8 +199,8 @@ class Process:
         >>> p.waitpid()
         0
         """
-        for stream in self.outputs:
-            if isinstance(stream, OutputPipe):
+        for stream in self.streams:
+            if isinstance(stream, (InputPipe, OutputPipe)):
                 stream.close_local()
 
     def read(self, stdout=True, stderr=True):
