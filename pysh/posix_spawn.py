@@ -1,4 +1,4 @@
-"""low-level module for spawning and waiting for processes on POSIX systems
+"""low-level module for spawning and waiting for processes with posix_spawn
 
 It only contains two functions, spawn() and wait()
 
@@ -18,6 +18,7 @@ hello world
 __all__ = 'spawn', 'wait'
 
 import os
+from .posix_wait import wait
 
 
 def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
@@ -53,26 +54,3 @@ def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
         file_actions=file_actions,
         setsigdef=setsigdef,
     )
-
-
-def wait(pid):
-    """wait on a pid to complete
-
-    >>> from time import time
-    >>> start = time(); pid = spawn(['sleep', '0.2']); wait(pid); print(round(time() - start, 1))
-    0
-    0.2
-    """
-    pid_, status = os.waitpid(pid, 0)
-    if pid_ == pid:
-        if os.WIFSIGNALED(status):
-            returncode = -os.WTERMSIG(status)
-        elif os.WIFEXITED(status):
-            returncode = os.WEXITSTATUS(status)
-        elif os.WIFSTOPPED(status):
-            returncode = -os.WSTOPSIG(status)
-        else:
-            raise RuntimeError(f'weird exit status: 0x{hex(pid)}')
-    else:
-        raise RuntimeError(f'pid is {pid_}, expected {pid}')
-    return returncode

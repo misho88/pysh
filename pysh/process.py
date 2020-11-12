@@ -1,15 +1,44 @@
-__all__ = 'PIPE', 'Process', 'Result', 'ResultError'
+__all__ = 'PIPE', 'Process', 'Result', 'ResultError', 'change_default_backend'
 
 from .fd import FD
 from .pipe import InputPipe, OutputPipe
 from sys import platform
-
-if platform == 'win32':
-    raise NotImplementedError('Windows is not currently supported')
-else:
-    from . import posix as backend
+import os
 
 PIPE = -1
+
+
+def get_backend(name=None):
+    if name == 'subprocess':
+        from . import subprocess as backend
+        return backend
+    if name == 'posix_spawn':
+        from . import posix_spawn as backend
+        return backend
+    if name == 'fork_exec':
+        from . import fork_exec as backend
+        return backend
+    if name == 'default':
+        return get_backend.default
+    raise ValueError(f'unknown backend: {name}')
+
+
+if 'PYSH_BACKEND' in os.environ:
+    get_backend.default = get_backend(os.environ['PYSH_BACKEND'])
+elif platform == 'win32':
+    get_backend.default = get_backend('subprocess')
+elif hasattr(os, 'posix_spawnp'):
+    get_backend.default = get_backend('posix_spawn')
+else:
+    get_backend.default = get_backend('fork_exec')
+
+
+def change_default_backend(name_or_namespace):
+    if isinstance(name_or_namespace, str):
+        get_backend.default = get_backend(name_or_namespace)
+    else:
+        get_backend.default = name_or_namespace
+    return get_backend.default
 
 
 def get_input(stream):
@@ -106,7 +135,7 @@ class Process:
     def __init__(
         self,
         argv, stdin=None, stdout=None, stderr=None,
-        shell=False, env=None,
+        shell=False, env=None, backend='default',
     ):
         """initialize the process
         argv:   arguments to process; will be run through shlex.split() if a str and shell=False
@@ -122,6 +151,12 @@ class Process:
                 if exactly True, run ['sh', '-c', 'argv']
                 if str, run through shlex.split() and append '-c' if there's only one token
                 otherwise, use as is
+        env:    mapping like os.environ; None should inherit os.environ, but it strictly
+                depends on the backend
+        backend: one of 'default', 'posix_spawn', 'fork_exec' and 'subprocess'.
+                 On modern Linux on Python>=3.6, posix_spawn should be the default.
+                 If something's not working, 'subprocess' is probably the most robust,
+                 but it comes with a lot of baggage.
 
         *If stdin is a process, it is treated specially. In particular Process.waitall() will
         work its way back to it, making sure not to read its own stdout.
@@ -129,6 +164,8 @@ class Process:
         from shlex import split
         self.argv = argv
         self.result = None
+
+        self.backend = get_backend(backend) if isinstance(backend, str) else backend
 
         if shell:
             if shell is True:
@@ -144,7 +181,7 @@ class Process:
 
         self.input = stdin if isinstance(stdin, Process) else None
         self.streams = get_input(stdin), get_output(stdout), get_output(stderr)
-        self.pid = backend.spawn(argv, env, *self.streams)
+        self.pid = self.backend.spawn(argv, env, *self.streams)
 
     @property
     def stdin(self):
@@ -170,7 +207,7 @@ class Process:
         >>> Process('exit 7').waitpid()
         7
         """
-        return backend.wait(self.pid)
+        return self.backend.wait(self.pid)
 
     def waitpid_all(self):
         r"""recursive version of waitpid()
