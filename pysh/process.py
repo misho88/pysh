@@ -37,6 +37,8 @@ def change_default_backend(name_or_namespace):
     if isinstance(name_or_namespace, str):
         get_backend.default = get_backend(name_or_namespace)
     else:
+        name_or_namespace.spawn
+        name_or_namespace.wait
         get_backend.default = name_or_namespace
     return get_backend.default
 
