@@ -63,14 +63,25 @@ class Pipe:
         3
         b'123'
 
-        Finally, if data_or_source is callable, calls it:
+        If data_or_source is callable, calls it:
         >>> f = Pipe(); f.write(lambda: b'123'); f.read()
         3
+        b'123'
+
+        Some more flexibility is available if source takes exactly 1 positional argument:
+        >>> f = Pipe(); f.write(lambda file: file.write(b'123')); f.read()
+        3
+        b'123'
+
+        And generators are honored (as expressions or separate defs):
+        >>> f = Pipe(); f.write(str(i).encode() for i in (1, 2, 3)); f.read()
         b'123'
 
         It does *not* automatically open strings as file paths or or integers
         as file descriptors these must be appropriately handled externally.
         """
+        from types import GeneratorType
+
         with self.write_fd.open() as file:
             try:
                 data = memoryview(data_or_source)
@@ -82,7 +93,16 @@ class Pipe:
                     with source.open() as stream:
                         return file.write(stream.read())
                 if callable(source):
-                    return file.write(source())
+                    try:
+                        data = source()
+                    except TypeError as e:
+                        if 'missing 1 required positional argument' not in e.args[0]:
+                            raise
+                        return source(file)
+                    else:
+                        return file.write(data)
+                if isinstance(source, GeneratorType):
+                    return file.writelines(source)
                 raise
             else:
                 return file.write(data)
