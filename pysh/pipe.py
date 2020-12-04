@@ -75,6 +75,7 @@ class Pipe:
 
         And generators are honored (as expressions or separate defs):
         >>> f = Pipe(); f.write(str(i).encode() for i in (1, 2, 3)); f.read()
+        3
         b'123'
 
         It does *not* automatically open strings as file paths or or integers
@@ -102,7 +103,11 @@ class Pipe:
                     else:
                         return file.write(data)
                 if isinstance(source, GeneratorType):
-                    return file.writelines(source)
+                    size = 0
+                    for line in source:
+                        size += file.write(line)
+                        file.flush()
+                    return size
                 raise
             else:
                 return file.write(data)
