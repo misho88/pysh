@@ -4,6 +4,7 @@ from .fd import FD
 from .pipe import InputPipe, OutputPipe
 from sys import platform
 import os
+import signal
 
 PIPE = -1
 
@@ -322,6 +323,44 @@ class Process:
         Result(argv='tr a-z A-Z', status=0, stdout=b'ABC\n')
         """
         return self.wait_all()[-1]
+
+    def kill(self, sig=signal.SIGTERM, dead_okay=None):
+        r"""convenience for os.kill(self.pid, signal)
+
+        sig can be an integer or the signal name, case insensitive, with or
+        without the 'SIG' prefix
+
+        dead_okay=False raises ProcessLookupError if the process is dead; by
+        default dead_okay=True for SIGTERM and SIGKILL and False otherwise
+
+        NOTE: this follows POSIX kill semantics, not those of `subprocess`; the
+        default behavior is to send SIGTERM, not SIGKILL.
+
+        >>> p = Process('sleep 10'); p.kill(); p.wait()
+        Result(argv='sleep 10', status=-15)
+        >>> p = Process('sleep 10'); p.kill(9); p.wait()
+        Result(argv='sleep 10', status=-9)
+        >>> p = Process('sleep 10'); p.kill('kill'); p.wait()
+        Result(argv='sleep 10', status=-9)
+        >>> p = Process('echo', stdout=PIPE); p.wait()
+        Result(argv='echo', status=0, stdout=b'\n')
+        >>> try: p.kill(dead_okay=False)
+        ... except ProcessLookupError: 'no good'
+        ...
+        'no good'
+        """
+        if isinstance(sig, str):
+            sig = sig.upper()
+            if not sig.startswith('SIG'):
+                sig = f'SIG{sig}'
+            sig = getattr(signal, sig)
+        if dead_okay is None:
+            dead_okay = sig == signal.SIGTERM or sig == signal.SIGKILL
+        try:
+            os.kill(self.pid, sig)
+        except ProcessLookupError:
+            if not dead_okay:
+                raise
 
 
 class ResultBase:
