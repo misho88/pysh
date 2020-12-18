@@ -78,8 +78,8 @@ class Pipe:
         3
         b'123'
 
-        It does *not* automatically open strings as file paths or or integers
-        as file descriptors these must be appropriately handled externally.
+        It does *not* automatically open strings as file paths or integers as
+        file descriptors these must be appropriately handled externally.
         """
         from types import GeneratorType
 
