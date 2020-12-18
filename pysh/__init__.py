@@ -115,9 +115,7 @@ And the shell can be changed:
 
 from .fd import FD  # noqa: F401
 from .pipe import Pipe, InputPipe, OutputPipe  # noqa: F401
-from .process import *  # noqa: F401
+from .process import *  # noqa: F401 F403
 from .util import *  # noqa: F401 F403
 
 from funcpipes import Pipe as _Pipe, to, now, get, Arguments  # noqa: F401
-
-
