@@ -7,7 +7,7 @@ It only contains two functions, spawn() and wait()
 >>> from tempfile import TemporaryDirectory
 >>> with TemporaryDirectory() as dir:
 ...     with open(f'{dir}/file', 'wb') as file:
-...         wait(spawn(['echo', 'hello world'], stdout=file))
+...         wait(spawn(['echo', 'hello world'], streams=dict(stdout=file)))
 ...     with open(f'{dir}/file') as file:
 ...         print(file.read(), end='')
 ...
@@ -19,9 +19,10 @@ __all__ = 'spawn', 'wait'
 
 import os
 from .posix_wait import wait
+from .spawn_util import get_streams
 
 
-def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
+def spawn(argv, env=None, streams=()):
     """spawn a process and return its pid
 
     >>> from time import time
@@ -35,15 +36,13 @@ def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
     if env is None:
         env = os.environb
 
-    streams = stdin, stdout, stderr
     file_actions = [
-        (os.POSIX_SPAWN_DUP2, stream.fileno(), child_fd)
-        for child_fd, stream in enumerate(streams)
-        if stream is not None
-    ] + [
-        (os.POSIX_SPAWN_CLOSE, stream.fileno())
-        for child_fd, stream in enumerate(streams)
-        if stream is not None
+        action
+        for child_fd, stream in get_streams(streams)
+        for action in (
+            (os.POSIX_SPAWN_DUP2, stream.fileno(), child_fd),
+            (os.POSIX_SPAWN_CLOSE, stream.fileno()),
+        )
     ]
 
     setsigdef = (getattr(signal, sig, None) for sig in ('SIGPIPE', 'SIGXFZ', 'SIGXFSZ'))

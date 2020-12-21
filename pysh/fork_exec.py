@@ -7,7 +7,7 @@ It only contains two functions, spawn() and wait()
 >>> from tempfile import TemporaryDirectory
 >>> with TemporaryDirectory() as dir:
 ...     with open(f'{dir}/file', 'wb') as file:
-...         wait(spawn(['echo', 'hello world'], stdout=file))
+...         wait(spawn(['echo', 'hello world'], streams=dict(stdout=file)))
 ...     with open(f'{dir}/file') as file:
 ...         print(file.read(), end='')
 ...
@@ -21,9 +21,10 @@ import os
 import signal
 from .posix_wait import wait
 from .pipe import Pipe
+from .spawn_util import get_streams
 
 
-def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
+def spawn(argv, env=None, streams=()):
     launch_pipe = Pipe()
 
     pid = os.fork()
@@ -45,10 +46,7 @@ def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
             continue
         signal.signal(sig, signal.SIG_DFL)
 
-    streams = stdin, stdout, stderr
-    for i, stream in enumerate(streams):
-        if stream is None:
-            continue
+    for i, stream in get_streams(streams):
         fd = stream.fileno()
         os.dup2(fd, i)
         os.close(fd)

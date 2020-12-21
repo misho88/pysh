@@ -138,7 +138,8 @@ class Process:
     def __init__(
         self,
         argv, stdin=None, stdout=None, stderr=None,
-        shell=False, env=None, backend='default',
+        *,
+        shell=False, env=None, backend='default', other_streams=(),
     ):
         """initialize the process
         argv:   arguments to process; will be run through shlex.split() if a str and shell=False
@@ -170,6 +171,9 @@ class Process:
 
         self.backend = get_backend(backend) if isinstance(backend, str) else backend
 
+        if other_streams and self.backend is get_backend('subprocess'):
+            raise NotImplementedError("other_streams is not supported with backend='subprocess'")
+
         if shell:
             if shell is True:
                 shell = 'sh -c'
@@ -184,7 +188,7 @@ class Process:
 
         self.input = stdin if isinstance(stdin, Process) else None
         self.streams = get_input(stdin), get_output(stdout), get_output(stderr)
-        self.pid = self.backend.spawn(argv, env, *self.streams)
+        self.pid = self.backend.spawn(argv, env, (self.streams + tuple(other_streams)))
 
     @property
     def stdin(self):

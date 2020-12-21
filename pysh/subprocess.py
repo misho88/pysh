@@ -7,7 +7,7 @@ It only contains two functions, spawn() and wait()
 >>> from tempfile import TemporaryDirectory
 >>> with TemporaryDirectory() as dir:
 ...     with open(f'{dir}/file', 'wb') as file:
-...         wait(spawn(['echo', 'hello world'], stdout=file))
+...         wait(spawn(['echo', 'hello world'], streams=dict(stdout=file)))
 ...     with open(f'{dir}/file') as file:
 ...         print(file.read(), end='')
 ...
@@ -18,12 +18,14 @@ hello world
 __all__ = 'spawn', 'wait'
 
 from subprocess import Popen
+from .spawn_util import get_streams
 
 spawned = {}
 
 
-def spawn(argv, env=None, stdin=None, stdout=None, stderr=None):
-    popen = Popen(argv, env=env, stdin=stdin, stdout=stdout, stderr=stderr)
+def spawn(argv, env=None, streams=()):
+    streams = get_streams(streams, include_None=True, ensure_std=True, std_names=True)
+    popen = Popen(argv, env=env, **dict(streams))
     spawned[popen.pid] = popen
     return popen.pid
 
