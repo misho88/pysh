@@ -161,6 +161,13 @@ class Process:
                  On modern Linux on Python>=3.6, posix_spawn should be the default.
                  If something's not working, 'subprocess' is probably the most robust,
                  but it comes with a lot of baggage.
+        other_streams:  add streams other than the standard ones. The format is either
+                        { child_fd: stream, ... } or [ stream, ... ]. In the latter case
+                        the FDs are enumerated starting at 3 (i.e., right after the std
+                        streams). Note that passing other_streams={1: ...} is not exactly
+                        the same as passing stdout=... in that Process.wait() will not
+                        attempt to manage the stream; however, if manually managing I/O
+                        and using Process.waitpid(), there is no difference.
 
         *If stdin is a process, it is treated specially. In particular Process.waitall() will
         work its way back to it, making sure not to read its own stdout.
@@ -188,7 +195,16 @@ class Process:
 
         self.input = stdin if isinstance(stdin, Process) else None
         self.streams = get_input(stdin), get_output(stdout), get_output(stderr)
-        self.pid = self.backend.spawn(argv, env, (self.streams + tuple(other_streams)))
+        streams = { i: s for i, s in enumerate(self.streams) if s is not None }
+        n = len(streams)
+        m = len(other_streams)
+        try:
+            streams.update(other_streams)
+        except TypeError:
+            streams.update(enumerate(other_streams, start=3))
+        if n + m != len(streams):
+            raise ValueError('duplicate stream specification')
+        self.pid = self.backend.spawn(argv, env, streams)
 
     @property
     def stdin(self):
