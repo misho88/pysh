@@ -10,6 +10,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from funcpipes import Pipe, to, now, get, Arguments
 from .process import Process, PIPE
+from threading import Lock
 
 
 @Pipe
@@ -71,8 +72,15 @@ def cd(path):
 
 
 @contextmanager
-def cwd(path):
+def cwd(path, locked=True):
     """temporarily changes the working directory
+
+    Threadsafe if locked is set (default). The effect is to simply wrap the
+    context with an exclusive lock, so it is reasonable to keep the code
+    inside the `with cwd(...):` block minimal. In the case of launching a
+    child process, the working directory of the parent only matters until the
+    child forks, so there is no benefit to waiting on the child inside the
+    cwd() context.
 
     >>> cd('/')
     b'/'
@@ -82,9 +90,14 @@ def cwd(path):
     >>> pwd()
     b'/'
     """
-    orig = pwd()
-    yield cd(path)
-    cd(orig)
+    if locked:
+        with cwd.lock:
+            yield from cwd.__wrapped__(path, False)
+    else:
+        orig = pwd()
+        yield cd(path)
+        cd(orig)
+cwd.lock = Lock()  # noqa: E305
 
 
 @Pipe
