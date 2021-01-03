@@ -296,12 +296,9 @@ class Process:
         >>> p.waitpid_all()
         (0, 0)
         """
-        self.close_local()
-
         previous = () if self.input is None else self.input.read_all(stdout=False, stderr=True)
-
+        self.close_local()
         output = self.read(stdout, stderr)
-
         return previous + ( output, )
 
     def argv_all(self):
