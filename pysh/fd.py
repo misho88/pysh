@@ -81,7 +81,7 @@ class FD:
     ...
     'test'
     """
-    def __init__(self, fd, mode):
+    def __init__(self, fd, mode='r'):
         self.fd = int(fd)
         self.mode = mode
 
