@@ -123,6 +123,11 @@ class FD:
 
     if fcntl is not None:
         def fcntl(self, cmd, arg=0):
+            """calls fcntl.fcntl with this FD as the FD argument
+
+            Additionally, cmd and arg can be strings that will be treated as
+            attributes of fcntl and os, respectively.
+            """
             if isinstance(cmd, str):
                 cmd = getattr(fcntl, cmd.upper())
             if isinstance(arg, str):
@@ -131,4 +136,5 @@ class FD:
 
         @cached_property
         def flags(self):
+            """access to FD flags"""
             return Flags(self.fd)
