@@ -5,3 +5,6 @@ pull:
 install:
 	cd funcpipes && make install
 	./setup.py install
+
+uninstall:
+	pip3 uninstall pysh
