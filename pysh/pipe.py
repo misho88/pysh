@@ -41,6 +41,8 @@ class Pipe:
     def write(self, data_or_source):
         """open the write FD, feed it some data and close it
 
+        Note that the method can be called only once.
+
         Since this is meant to be a one-off operation, it's a bit more
         flexible than a traditiona write.
 
@@ -113,6 +115,7 @@ class Pipe:
                 return file.write(data)
 
     def read(self):
+        """open the write FD, read all data from it and close it"""
         with self.read_fd.open() as file:
             return file.read()
 
