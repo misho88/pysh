@@ -1,0 +1,3 @@
+[submodule "funcpipes"]
+	path = funcpipes
+	url = https://github.com/misho88/funcpipes.git
