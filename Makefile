@@ -1,7 +1,7 @@
 GIT_BRANCH ?= "main"
 
 checkout:
-	cd funcpipes && git checkout
+	cd funcpipes && git checkout $(GIT_BRANCH)
 	git checkout $(GIT_BRANCH)
 
 pull:
