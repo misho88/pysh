@@ -379,6 +379,14 @@ class Process:
             if not dead_okay:
                 raise
 
+    def kill_all(self, sig=signal.SIGTERM, dead_okay=None):
+        r'''recursively kill all input processes
+
+        same arguments as .kill()
+        '''
+        self.kill(sig, dead_okay)
+        if self.input is not None:
+            self.input.kill_all(sig, dead_okay)
 
 class ResultBase:
     def __init__(self, argv, status, stdout=None, stderr=None):
