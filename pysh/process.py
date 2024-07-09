@@ -222,7 +222,7 @@ class Process:
     def outputs(self):
         return self.streams[1:]
 
-    def waitpid(self):
+    def waitpid(self, kill: signal.Signals | int = 0):
         r"""like os.waitpid(), but returns an exit status
 
         NOTE: you should probably use process.wait().returncode instead
@@ -230,9 +230,11 @@ class Process:
         >>> Process('exit 7').waitpid()
         7
         """
+        if kill:
+            self.kill(kill)
         return self.backend.wait(self.pid)
 
-    def waitpid_all(self):
+    def waitpid_all(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
         r"""recursive version of waitpid()
 
         NOTE: you should probably use process.wait_all() instead
@@ -240,8 +242,8 @@ class Process:
         >>> Process('exit 2', Process('exit 1')).waitpid_all()
         (1, 2)
         """
-        status = self.waitpid()
-        previous = () if self.input is None else self.input.waitpid_all()
+        status = self.waitpid(kill)
+        previous = () if self.input is None else self.input.waitpid_all(kill_chain, kill_chain)
         return previous + ( status, )
 
     def close_local(self):
@@ -317,7 +319,7 @@ class Process:
         previous = () if self.input is None else self.input.argv_all()
         return previous + (self.argv,)
 
-    def wait_all(self):
+    def wait_all(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
         r"""wait on every process of the chain and collect results
 
         >>> Process('tr a-z A-Z', Process('echo abc', None, PIPE), PIPE).wait_all()
@@ -325,7 +327,7 @@ class Process:
         """
         argvs = self.argv_all()
         outputs = self.read_all()
-        statuses = self.waitpid_all()
+        statuses = self.waitpid_all(kill, kill_chain)
 
         results = tuple(
             Result(argv, status, stdout, stderr)
@@ -333,15 +335,15 @@ class Process:
         )
         return results
 
-    def wait(self):
+    def wait(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
         r"""short for process.wait_all()[-1]
 
         >>> Process('tr a-z A-Z', Process('echo abc', None, PIPE), PIPE).wait()
         Result(argv='tr a-z A-Z', status=0, stdout=b'ABC\n')
         """
-        return self.wait_all()[-1]
+        return self.wait_all(kill, kill_chain)[-1]
 
-    def kill(self, sig=signal.SIGTERM, dead_okay=None):
+    def kill(self, sig: signal.Signals | int = signal.SIGTERM, dead_okay: bool | None = None):
         r"""convenience for os.kill(self.pid, signal)
 
         sig can be an integer or the signal name, case insensitive, with or
@@ -387,6 +389,7 @@ class Process:
         self.kill(sig, dead_okay)
         if self.input is not None:
             self.input.kill_all(sig, dead_okay)
+
 
 class ResultBase:
     def __init__(self, argv, status, stdout=None, stderr=None):
