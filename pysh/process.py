@@ -206,6 +206,33 @@ class Process:
             raise ValueError('duplicate stream specification')
         self.pid = self.backend.spawn(argv, env, streams)
 
+    @classmethod
+    def emit(cls, argv, *args, **kwargs):
+        r'''same as Process(argv, None, PIPE, *args, **kwargs)
+
+        >>> Process.emit('echo abc').wait()
+        Result(argv='echo abc', status=0, stdout=b'abc\n')
+        '''
+        return cls(argv, None, PIPE, *args, **kwargs)
+
+    def into(self, argv, *args, **kwargs):
+        r'''same as Process(argv, self, *args, **kwargs)
+
+        >>> Process.emit('echo abc').into('tr a-z A-Z', stdout=PIPE).wait()
+        Result(argv='tr a-z A-Z', status=0, stdout=b'ABC\n')
+        '''
+        if self.stdout is None:
+            raise ValueError(f'{type(self).__name__}({repr(self.argv)}, ...) writes to standard output')
+        return type(self)(argv, self, *args, **kwargs)
+
+    def through(self, argv, *args, **kwargs):
+        r'''same as self.into(argv, PIPE, self, *args, **kwargs)
+
+        >>> Process.emit('echo abc').through('tr a-z A-Z').wait()
+        Result(argv='tr a-z A-Z', status=0, stdout=b'ABC\n')
+        '''
+        return self.into(argv, PIPE, *args, **kwargs)
+
     @property
     def stdin(self):
         return self.streams[0]
