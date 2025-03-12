@@ -1,3 +1,8 @@
+PYTHON_SITE=$(shell python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+MODULE_ROOT=pysh
+MODULE_FILES=$(wildcard $(MODULE_ROOT)/*.py)
+
+
 GIT_BRANCH ?= "main"
 
 checkout:
@@ -10,7 +15,9 @@ pull:
 
 install:
 	cd funcpipes && make install
-	./setup.py install
+	install -d $(PYTHON_SITE)/$(MODULE_ROOT)
+	install $(MODULE_FILES) $(PYTHON_SITE)/$(MODULE_ROOT)
 
 uninstall:
-	pip3 uninstall pysh
+	cd $(PYTHON_SITE) && rm -f $(MODULE_FILES)
+	cd $(PYTHON_SITE) && rmdir $(MODULE_ROOT)
