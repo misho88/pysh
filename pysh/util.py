@@ -1,7 +1,7 @@
 __all__ = (
     'pid', 'pwd', 'cd', 'cwd', 'lsof', 'lsof_iter',
     'to', 'now', 'get', 'Arguments',
-    'proc', 'wait', 'check', 'die', 'run',
+    'proc', 'wait', 'check', 'die', 'run', 'multikill'
 )
 
 import os
@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from funcpipes import Pipe, to, now, get, Arguments
 from .process import Process, PIPE
 from threading import Lock
+from signal import SIGTERM
 
 
 @Pipe
@@ -118,3 +119,9 @@ for func in proc, run:
         w.o = w.partial(stdout=PIPE, stderr=None)
         w.e = w.partial(stdout=None, stderr=PIPE)
         w.oe = w.partial(stdout=PIPE, stderr=PIPE)
+
+
+def multikill(pids, signal=SIGTERM):
+    '''like `for pid in pids: os.kill(pid, signal)`'''
+    for pid in pids:
+        os.kill(pid, signal)
