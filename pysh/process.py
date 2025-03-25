@@ -425,7 +425,7 @@ class Process:
             dead_okay = sig == SIGTERM or sig == SIGKILL
 
         if include_unmanaged:
-            for child in children(self.pid):
+            for child in children(self.pid, recursive=True):
                 try:
                     os.kill(child, sig)
                 except ProcessLookupError:
