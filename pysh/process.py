@@ -17,6 +17,26 @@ def get_signal(sig: Signals | int | str) -> Signals:
     return Signals(sig)
 
 
+def kill1(pid, sig, dead_okay=None):
+    sig = get_signal(sig)
+
+    if dead_okay is None:
+        dead_okay = sig == SIGTERM or sig == SIGKILL
+
+    try:
+        os.kill(pid, sig)
+    except ProcessLookupError:
+        if not dead_okay:
+            raise
+
+
+def kill(pid, sig, dead_okay=None, include_children=False):
+    if not include_children:
+        return kill1(pid, sig, dead_okay)
+    for pid in children(pid, recursive=True, include_parent=True):
+        kill1(pid, sig, dead_okay)
+
+
 def get_backend(name=None):
     if name == 'subprocess':
         from . import subprocess as backend
@@ -378,7 +398,7 @@ class Process:
         """
         return self.wait_all(kill, kill_chain)[-1]
 
-    def kill(self, sig: Signals | int | str = SIGTERM, dead_okay: bool | None = None):
+    def kill(self, sig: Signals | int | str = SIGTERM, dead_okay: bool | None = None, include_children=True):
         r"""convenience for os.kill(self.pid, signal)
 
         sig can be an integer or the signal name, case insensitive, with or
@@ -386,6 +406,8 @@ class Process:
 
         dead_okay=False raises ProcessLookupError if the process is dead; by
         default dead_okay=True for SIGTERM and SIGKILL and False otherwise
+
+        include_children=True send the signal to all children as well
 
         NOTE: this follows POSIX kill semantics, not those of `subprocess`; the
         default behavior is to send SIGTERM, not SIGKILL.
@@ -403,16 +425,9 @@ class Process:
         ...
         'no good'
         """
-        sig = get_signal(sig)
-        if dead_okay is None:
-            dead_okay = sig == SIGTERM or sig == SIGKILL
-        try:
-            os.kill(self.pid, sig)
-        except ProcessLookupError:
-            if not dead_okay:
-                raise
+        return kill(self.pid, sig, dead_okay, include_children)
 
-    def kill_all(self, sig=SIGTERM, dead_okay=None, include_unmanaged=False):
+    def kill_all(self, sig=SIGTERM, dead_okay=None, include_children=True):
         r'''recursively kill all input processes
 
         same arguments as .kill() except:
@@ -420,22 +435,9 @@ class Process:
             managed by this Process object or its inputs
             This is useful if one of these processes has its own children.
         '''
-        sig = get_signal(sig)
-        if dead_okay is None:
-            dead_okay = sig == SIGTERM or sig == SIGKILL
-
-        if include_unmanaged:
-            for child in children(self.pid, recursive=True):
-                try:
-                    os.kill(child, sig)
-                except ProcessLookupError:
-                    if not dead_okay:
-                        raise
-            self.kill(sig, dead_okay)
-        else:
-            self.kill(sig, dead_okay)
-            if self.input is not None:
-                self.input.kill_all(sig, dead_okay)
+        if self.input is not None:
+            self.input.kill_all(sig, dead_okay, include_children)
+        self.kill(sig, dead_okay, include_children)
 
 
 class ResultBase:
