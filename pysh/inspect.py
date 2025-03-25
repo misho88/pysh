@@ -19,20 +19,23 @@ def pids():
 
 def iter_status(pid):
     '''yield all key-value pairs in /proc/$PID/status'''
-    with open(f'/proc/{pid}/status') as file:
-        for line in file:
-            key, tail = line.split(':\t', maxsplit=1)
-            try:
-                yield key, int(tail)
-                continue
-            except ValueError:
-                pass
-            try:
-                yield key, [ int(value) for value in tail.split() ]
-                continue
-            except ValueError:
-                pass
-            yield key, tail.removesuffix('\n')
+    try:
+        with open(f'/proc/{pid}/status') as file:
+            for line in file:
+                key, tail = line.split(':\t', maxsplit=1)
+                try:
+                    yield key, int(tail)
+                    continue
+                except ValueError:
+                    pass
+                try:
+                    yield key, [ int(value) for value in tail.split() ]
+                    continue
+                except ValueError:
+                    pass
+                yield key, tail.removesuffix('\n')
+    except FileNotFoundError as e:
+        raise ProcessLookupError from e
 
 
 def status(pid, key=None):
@@ -75,8 +78,11 @@ def tasks(pid):
 
     There is usually one task, and that task is $PID.
     '''
-    for file in listdir(f'/proc/{pid}/task'):
-        yield int(file)
+    try:
+        for file in listdir(f'/proc/{pid}/task'):
+            yield int(file)
+    except FileNotFoundError as e:
+        raise ProcessLookupError from e
 
 
 def children(pid, recursive=False, include_parent=False):
@@ -85,12 +91,15 @@ def children(pid, recursive=False, include_parent=False):
     if recursive: look for children of children
     if include_parent: yield pid at the end
     '''
-    for task in tasks(pid):
-        with open(f'/proc/{pid}/task/{task}/children') as file:
-            for child in file.read().split():
-                child = int(child)
-                if recursive:
-                    yield from children(child)
-                yield child
-    if include_parent:
-        yield pid
+    try:
+        for task in tasks(pid):
+            with open(f'/proc/{pid}/task/{task}/children') as file:
+                for child in file.read().split():
+                    child = int(child)
+                    if recursive:
+                        yield from children(child)
+                    yield child
+        if include_parent:
+            yield pid
+    except FileNotFoundError as e:
+        raise ProcessLookupError from e
