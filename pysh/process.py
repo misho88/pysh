@@ -439,6 +439,12 @@ class Process:
             self.input.kill_all(sig, dead_okay, include_children)
         self.kill(sig, dead_okay, include_children)
 
+    def pipeline(self):
+        '''yields the pipeline of Processes that ends with this Process'''
+        if self.input is not None:
+            yield from self.input.pipeline()
+        yield self
+
 
 class ResultBase:
     def __init__(self, argv, status, stdout=None, stderr=None):
