@@ -2,11 +2,19 @@ __all__ = 'PIPE', 'Process', 'Result', 'ResultError', 'change_default_backend'
 
 from .fd import FD
 from .pipe import InputPipe, OutputPipe
+from .inspect import children
 from sys import platform
 import os
-import signal
+from signal import Signals, SIGKILL, SIGTERM
 
 PIPE = -1
+
+
+def get_signal(sig: Signals | int | str) -> Signals:
+    if isinstance(sig, str):
+        sig = sig.upper()
+        return Signals[sig if sig.startswith('SIG') else f'SIG{sig}']
+    return Signals(sig)
 
 
 def get_backend(name=None):
@@ -249,7 +257,7 @@ class Process:
     def outputs(self):
         return self.streams[1:]
 
-    def waitpid(self, kill: signal.Signals | int = 0):
+    def waitpid(self, kill: Signals | int = 0):
         r"""like os.waitpid(), but returns an exit status
 
         NOTE: you should probably use process.wait().returncode instead
@@ -261,7 +269,7 @@ class Process:
             self.kill(kill)
         return self.backend.wait(self.pid)
 
-    def waitpid_all(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
+    def waitpid_all(self, kill: Signals | int = 0, kill_chain: Signals | int = SIGTERM):
         r"""recursive version of waitpid()
 
         NOTE: you should probably use process.wait_all() instead
@@ -308,7 +316,7 @@ class Process:
         """
         try_read = stdout, stderr
         return tuple(
-            stream.read() if read and stream is not None and stream.readable() else None
+            stream.read() if read and stream is not None and stream.readable() else None  # type: ignore
             for stream, read in zip(self.outputs, try_read)
         )
 
@@ -346,7 +354,7 @@ class Process:
         previous = () if self.input is None else self.input.argv_all()
         return previous + (self.argv,)
 
-    def wait_all(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
+    def wait_all(self, kill: Signals | int = 0, kill_chain: Signals | int = SIGTERM):
         r"""wait on every process of the chain and collect results
 
         >>> Process('tr a-z A-Z', Process('echo abc', None, PIPE), PIPE).wait_all()
@@ -362,7 +370,7 @@ class Process:
         )
         return results
 
-    def wait(self, kill: signal.Signals | int = 0, kill_chain: signal.Signals | int = signal.SIGTERM):
+    def wait(self, kill: Signals | int = 0, kill_chain: Signals | int = SIGTERM):
         r"""short for process.wait_all()[-1]
 
         >>> Process('tr a-z A-Z', Process('echo abc', None, PIPE), PIPE).wait()
@@ -370,7 +378,7 @@ class Process:
         """
         return self.wait_all(kill, kill_chain)[-1]
 
-    def kill(self, sig: signal.Signals | int = signal.SIGTERM, dead_okay: bool | None = None):
+    def kill(self, sig: Signals | int | str = SIGTERM, dead_okay: bool | None = None):
         r"""convenience for os.kill(self.pid, signal)
 
         sig can be an integer or the signal name, case insensitive, with or
@@ -395,27 +403,39 @@ class Process:
         ...
         'no good'
         """
-        if isinstance(sig, str):
-            sig = sig.upper()
-            if not sig.startswith('SIG'):
-                sig = f'SIG{sig}'
-            sig = getattr(signal, sig)
+        sig = get_signal(sig)
         if dead_okay is None:
-            dead_okay = sig == signal.SIGTERM or sig == signal.SIGKILL
+            dead_okay = sig == SIGTERM or sig == SIGKILL
         try:
             os.kill(self.pid, sig)
         except ProcessLookupError:
             if not dead_okay:
                 raise
 
-    def kill_all(self, sig=signal.SIGTERM, dead_okay=None):
+    def kill_all(self, sig=SIGTERM, dead_okay=None, include_unmanaged=False):
         r'''recursively kill all input processes
 
-        same arguments as .kill()
+        same arguments as .kill() except:
+        include_unmanaged: kill all child PIDs, including those not directly
+            managed by this Process object or its inputs
+            This is useful if one of these processes has its own children.
         '''
-        self.kill(sig, dead_okay)
-        if self.input is not None:
-            self.input.kill_all(sig, dead_okay)
+        sig = get_signal(sig)
+        if dead_okay is None:
+            dead_okay = sig == SIGTERM or sig == SIGKILL
+
+        if include_unmanaged:
+            for child in children(self.pid):
+                try:
+                    os.kill(child, sig)
+                except ProcessLookupError:
+                    if not dead_okay:
+                        raise
+            self.kill(sig, dead_okay)
+        else:
+            self.kill(sig, dead_okay)
+            if self.input is not None:
+                self.input.kill_all(sig, dead_okay)
 
 
 class ResultBase:
