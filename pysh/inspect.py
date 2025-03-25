@@ -1,4 +1,9 @@
-__all__ = 'pids', 'iter_status', 'status', 'owned', 'tasks', 'children'
+__all__ = (
+    'pids',
+    'iter_status', 'status', 'owned',
+    'find_pids', 'find_pid',
+    'tasks', 'children',
+)
 
 from os import listdir, getuid
 
@@ -50,6 +55,21 @@ def owned(pid, uid=None):
     return status(pid, 'Uid')[0] == uid  # type: ignore
 
 
+def find_pids(**kwargs):
+    '''find PIDs by their status
+
+    e.g., find_pids(Name='bash') to find the PIDs of scripts
+    '''
+    for pid in pids():
+        if all(status(pid, key) == value for key, value in kwargs.items()):
+            yield pid
+
+
+def find_pid(**kwargs):
+    '''same as next(find_pids(**kwargs))'''
+    return next(find_pids(**kwargs))
+
+
 def tasks(pid):
     '''get a list of all tasks in /proc/$PID/task
 
@@ -59,18 +79,18 @@ def tasks(pid):
         yield int(file)
 
 
-def children(pid, recursive=False, include_pid=False):
+def children(pid, recursive=False, include_parent=False):
     '''get every child process of PID
 
     if recursive: look for children of children
-    if include_pid: yield pid first
+    if include_parent: yield pid at the end
     '''
-    if include_pid:
-        yield pid
     for task in tasks(pid):
         with open(f'/proc/{pid}/task/{task}/children') as file:
             for child in file.read().split():
                 child = int(child)
-                yield child
                 if recursive:
                     yield from children(child)
+                yield child
+    if include_parent:
+        yield pid
